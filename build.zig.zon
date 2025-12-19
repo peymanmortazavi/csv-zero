@@ -1,0 +1,14 @@
+.{
+    .name = .zcsv,
+    .version = "0.1.0",
+    .fingerprint = 0xd22314a1a8e7344b,
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        //"LICENSE",
+        //"README.md",
+    },
+}
