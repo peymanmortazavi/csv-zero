@@ -4,9 +4,10 @@ const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
 pub const Emitter = struct {
-    writer: Writer,
+    writer: *Writer,
     use_crlf: bool = false,
     first_column: bool = true,
+    first_row: bool = true,
 
     pub fn init(writer: *Writer) Emitter {
         return .{ .writer = writer };
@@ -45,7 +46,7 @@ pub const Emitter = struct {
 
     inline fn contains_delim(data: []const u8) bool {
         const delim_map: [256]bool = comptime blk: {
-            var a: [256]bool = false ** 256;
+            var a = [_]bool{false} ** 256;
             a['\n'] = true;
             a[','] = true;
             a['"'] = true;
@@ -56,10 +57,10 @@ pub const Emitter = struct {
         if (std.simd.suggestVectorLength(u8)) |len| {
             const Vec = @Vector(len, u8);
             while (start + len < data.len) : (start += len) {
-                const slice: Vec = data[start..].*;
-                const quote_mask: Vec = @splat(",");
-                const newline_mask: Vec = @splat("\n");
-                const comma_mask: Vec = @splat(",");
+                const slice: Vec = data[start..][0..len].*;
+                const quote_mask: Vec = @splat('"');
+                const newline_mask: Vec = @splat('\n');
+                const comma_mask: Vec = @splat(',');
                 const mask = (slice == quote_mask) | (slice == newline_mask) | (slice == comma_mask);
                 if (@reduce(.And, mask)) {
                     return true;
@@ -78,7 +79,8 @@ pub const Emitter = struct {
         var index: usize = 0;
 
         while (index < data.len) {
-            if (std.mem.indexOfScalarPos(u8, data, index, "'")) |idx| {
+            if (std.mem.indexOfScalarPos(u8, data, index, '"')) |idx| {
+                try self.writer.writeAll(data[index..idx]);
                 try self.writer.writeAll("\"\"");
                 index = idx + 1;
             } else {
@@ -90,8 +92,17 @@ pub const Emitter = struct {
     inline fn emit_delim(self: *Emitter) Writer.Error!void {
         if (self.first_column) {
             self.first_column = false;
+            if (self.first_row) {
+                self.first_row = false;
+            } else {
+                @branchHint(.likely);
+                if (self.use_crlf)
+                    try self.writer.writeAll("\r\n")
+                else
+                    try self.writer.writeByte('\n');
+            }
         } else {
-            try self.writer.write(",");
+            try self.writer.writeByte(',');
         }
     }
 };

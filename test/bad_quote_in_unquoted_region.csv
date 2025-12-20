@@ -1,2 +1,2 @@
 a,b,c
-d," in it even if it is closed"
+d,unquoted region cannot have " in it even if it is closed"

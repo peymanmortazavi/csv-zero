@@ -127,7 +127,7 @@ const IterateTestCase = struct {
     }
 };
 
-test "suite" {
+test "iterator" {
     const test_cases = [_]IterateTestCase{
         .{
             .path = "simple_single_row.csv",
@@ -297,5 +297,57 @@ test "suite" {
 
         var it = zcsv.Iterator.init(&file_reader.interface);
         try tt.run(&it);
+    }
+}
+
+test "emitter" {
+    const TestCase = struct {
+        name: []const u8,
+        table: Table,
+        expectation: []const u8,
+    };
+
+    const cases: []const TestCase = &.{
+        .{
+            .name = "simple",
+            .table = &.{
+                &.{ "header one", "header two" },
+                &.{ "value one", "value two" },
+            },
+            .expectation =
+            \\header one,header two
+            \\value one,value two
+            ,
+        },
+        .{
+            .name = "mixed quotes",
+            .table = &.{
+                &.{ "header one", "header \"two\"" },
+                &.{ "value, one", "value two" },
+            },
+            .expectation =
+            \\header one,"header ""two"""
+            \\"value, one",value two
+            ,
+        },
+    };
+
+    for (cases) |tt| {
+        const ally = std.testing.allocator;
+        var writer = std.Io.Writer.Allocating.init(ally);
+        defer writer.deinit();
+
+        var emitter = zcsv.Emitter.init(&writer.writer);
+        for (tt.table) |row| {
+            for (row) |col| {
+                try emitter.emit(col);
+            }
+            emitter.next_row();
+        }
+
+        if (!std.mem.eql(u8, writer.written(), tt.expectation)) {
+            std.log.err("\nexpected:\n{s}\n\nreceived:\n{s}\n\n", .{ tt.expectation, writer.written() });
+            return error.UnequalEmitterOutput;
+        }
     }
 }
