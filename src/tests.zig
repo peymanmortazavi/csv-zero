@@ -1,5 +1,5 @@
 const std = @import("std");
-const zcsv = @import("root.zig");
+const csvz = @import("root.zig");
 
 const string = []const u8;
 const Columns = []const string;
@@ -12,7 +12,7 @@ const IterateTestCase = struct {
     buffer_size: usize = 64,
 
     const ErrorExpectation = struct {
-        err: zcsv.Iterator.Error,
+        err: csvz.Iterator.Error,
         row: usize,
         col: usize,
     };
@@ -34,7 +34,7 @@ const IterateTestCase = struct {
         return if (len == 0) 0 else len - 1;
     }
 
-    fn checkLastErr(self: *const IterateTestCase, received_err: zcsv.Iterator.Error) !void {
+    fn checkLastErr(self: *const IterateTestCase, received_err: csvz.Iterator.Error) !void {
         const expected = self.expected_error orelse {
             std.debug.print(
                 "Unexpected error {s}",
@@ -60,7 +60,7 @@ const IterateTestCase = struct {
         return error.UnexpectedError;
     }
 
-    fn checkErr(self: *const IterateTestCase, received_err: zcsv.Iterator.Error, row: usize, col: usize) !void {
+    fn checkErr(self: *const IterateTestCase, received_err: csvz.Iterator.Error, row: usize, col: usize) !void {
         const expected = self.expectedErrAt(row, col) orelse {
             std.debug.print(
                 "Unexpected error {s} at row={d} col={d}",
@@ -86,7 +86,7 @@ const IterateTestCase = struct {
         return error.UnexpectedError;
     }
 
-    fn run(tt: *const @This(), it: *zcsv.Iterator) !void {
+    fn run(tt: *const @This(), it: *csvz.Iterator) !void {
         // for each column in test case, we should see a value in the same row in the iterator.
         for (tt.expected_table, 0..) |row, row_index| {
             for (row, 0..) |col, col_index| {
@@ -113,7 +113,7 @@ const IterateTestCase = struct {
 
         // ensure it has no more rows
         var col = it.next() catch |err| switch (err) {
-            zcsv.Iterator.Error.EOF => return,
+            csvz.Iterator.Error.EOF => return,
             else => |e| {
                 return try tt.checkLastErr(e);
             },
@@ -222,7 +222,7 @@ test "iterator" {
         .{
             .path = "bad_column_too_long.csv",
             .expected_error = .{
-                .err = zcsv.Iterator.Error.ColumnTooLong,
+                .err = csvz.Iterator.Error.ColumnTooLong,
                 .row = 1,
                 .col = 0,
             },
@@ -234,7 +234,7 @@ test "iterator" {
         .{
             .path = "bad_column_too_long_quote.csv",
             .expected_error = .{
-                .err = zcsv.Iterator.Error.ColumnTooLong,
+                .err = csvz.Iterator.Error.ColumnTooLong,
                 .row = 1,
                 .col = 0,
             },
@@ -246,7 +246,7 @@ test "iterator" {
         .{
             .path = "bad_unescaped_quotes.csv",
             .expected_error = .{
-                .err = zcsv.Iterator.Error.InvalidQuotes,
+                .err = csvz.Iterator.Error.InvalidQuotes,
                 .row = 1,
                 .col = 1,
             },
@@ -258,7 +258,7 @@ test "iterator" {
         .{
             .path = "bad_no_closing_quote_delim.csv",
             .expected_error = .{
-                .err = zcsv.Iterator.Error.InvalidQuotes,
+                .err = csvz.Iterator.Error.InvalidQuotes,
                 .row = 1,
                 .col = 1,
             },
@@ -270,7 +270,7 @@ test "iterator" {
         .{
             .path = "bad_quote_in_unquoted_region.csv",
             .expected_error = .{
-                .err = zcsv.Iterator.Error.InvalidQuotes,
+                .err = csvz.Iterator.Error.InvalidQuotes,
                 .row = 1,
                 .col = 1,
             },
@@ -295,7 +295,7 @@ test "iterator" {
 
         var file_reader = test_file.reader(read_buffer);
 
-        var it = zcsv.Iterator.init(&file_reader.interface);
+        var it = csvz.Iterator.init(&file_reader.interface);
         try tt.run(&it);
     }
 }
@@ -337,7 +337,7 @@ test "emitter" {
         var writer = std.Io.Writer.Allocating.init(ally);
         defer writer.deinit();
 
-        var emitter = zcsv.Emitter.init(&writer.writer);
+        var emitter = csvz.Emitter.init(&writer.writer);
         for (tt.table) |row| {
             for (row) |col| {
                 try emitter.emit(col);

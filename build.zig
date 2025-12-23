@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("zcsv", .{
+    const mod = b.addModule("csvzero", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
     });
@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "zcsv", .module = mod },
+                .{ .name = "csvzero", .module = mod },
             },
         }),
     });

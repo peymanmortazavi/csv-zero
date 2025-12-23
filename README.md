@@ -1,4 +1,4 @@
-# zcsv
+# csv-zero
 
 Zero Allocation, SIMD-accelerated CSV iterator and emitter in Zig.
 
@@ -8,18 +8,18 @@ heap memory unless instructed by the user when a single column cannot fit entire
 The iterator works with any buffered `std.Io.Reader` instance.
 
 ```zig
-const zcsv = @import("zcsv");
+const csvz = @import("csvzero");
 
 fn print_csv_columns_count(file_path: []const u8) !void {
     var file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
     var buffer: [64_000]u8 = undefined;
     var reader = file.reader(&buffer);
     const file_reader = &reader.interface;
-    var csvit = zcsv.Iterator.init(file_reader);
+    var csvit = csvz.Iterator.init(file_reader);
     var sum: usize = 0;
     while (true) {
         const col = csvit.next() catch |err| switch (err) {
-            zcsv.Iterator.Error.EOF => break,
+            csvz.Iterator.Error.EOF => break,
             else => |e| return e,
         };
         _ = col;
