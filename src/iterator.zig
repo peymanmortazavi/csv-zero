@@ -3,7 +3,9 @@ const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
-pub const Column = struct {
+/// Field represents a CSV-field.
+/// Its contents are guaranteed to remain valid until next call to the `next()` function.
+pub const Field = struct {
     /// the raw column data which is a slice of the buffer in the reader.
     /// this may need escaping, needs_escape holds whether or not escaping is necessary.
     /// use unescaped to get the unescaped value regardless.
@@ -13,7 +15,7 @@ pub const Column = struct {
     /// indicates whether or not escaped double quotes are present in the column.
     needs_escape: bool = false,
 
-    pub fn eql(self: *const Column, other: Column) bool {
+    pub fn eql(self: *const Field, other: Field) bool {
         return std.mem.eql(u8, self.data, other.data) and
             self.last_column == other.last_column and
             self.needs_escape == self.needs_escape;
@@ -21,7 +23,7 @@ pub const Column = struct {
 
     /// remove the escape characters in the text if necessary and return the column.
     /// this method has a side-effect and will overwrite the column data.
-    pub fn unescaped(self: *Column) []u8 {
+    pub fn unescaped(self: *Field) []u8 {
         if (self.needs_escape) {
             self.needs_escape = false;
             self.data = replaceInPlaceMemCpy(self.data);
@@ -31,11 +33,11 @@ pub const Column = struct {
         return self.data;
     }
 
-    fn fmt(self: *const Column, writer: *Writer) Writer.Error!void {
+    fn fmt(self: *const Field, writer: *Writer) Writer.Error!void {
         try writer.print("{s} [last col={}]", .{ self.data, self.last_column });
     }
 
-    fn new(ally: Allocator, col: []const u8, last_col: bool, needs_escape: bool) Allocator.Error!Column {
+    fn new(ally: Allocator, col: []const u8, last_col: bool, needs_escape: bool) Allocator.Error!Field {
         const c = try ally.dupe(u8, col);
         return .{ .data = c, .last_column = last_col, .needs_escape = needs_escape };
     }
@@ -48,25 +50,30 @@ pub const Iterator = struct {
     vector: Bitmask = if (use_vectors) 0 else {},
     vector_offset: if (use_vectors) usize else void = if (use_vectors) 0 else {},
 
+    const Delimiter = ',';
+    const Newline = '\n';
+    const CarriageReturn = '\r';
+    const Quote = '"';
+
     const L: ?comptime_int = std.simd.suggestVectorLength(u8);
     const Bitmask = if (L) |len| std.meta.Int(.unsigned, len) else void;
     const Vector = if (L) |len| @Vector(len, u8) else void;
 
-    const QuoteMask: Vector = @splat('"');
-    const CommaMask: Vector = @splat(',');
-    const NewLineMask: Vector = @splat('\n');
+    const QuoteMask: Vector = @splat(Quote);
+    const DelimiterMask: Vector = @splat(Delimiter);
+    const NewLineMask: Vector = @splat(Newline);
 
     const use_vectors = L != null;
 
     const is_delim = blk: {
         var t = [_]bool{false} ** 256;
-        t[','] = true;
-        t['\n'] = true;
-        t['"'] = true;
+        t[Delimiter] = true;
+        t[Newline] = true;
+        t[Quote] = true;
         break :blk t;
     };
 
-    pub const Error = error{ ReadFailed, InvalidQuotes, ColumnTooLong, EOF };
+    pub const Error = error{ ReadFailed, InvalidQuotes, FieldTooLong, EOF };
 
     const QuotedRegion = struct {
         end: usize,
@@ -74,9 +81,7 @@ pub const Iterator = struct {
     };
 
     pub fn init(reader: *std.Io.Reader) Iterator {
-        return .{
-            .reader = reader,
-        };
+        return .{ .reader = reader };
     }
 
     /// finds the end of the quoted region (assuming the first double quote is alerady consumed).
@@ -90,7 +95,7 @@ pub const Iterator = struct {
         var r = self.reader;
 
         while (self.nextDelimPos(i)) |idx| {
-            if (data[idx] == '"') {
+            if (data[idx] == Quote) {
                 if (idx + 1 == data.len) {
                     @branchHint(.unlikely);
                     self.quote_pending = true;
@@ -98,7 +103,7 @@ pub const Iterator = struct {
                 }
 
                 switch (data[idx + 1]) {
-                    '"' => {
+                    Quote => {
                         self.needs_escape = true;
                         self.skipNextDelim();
                         i = idx + 2;
@@ -108,12 +113,12 @@ pub const Iterator = struct {
                         r.toss(1 + 1 + idx - r.seek); // toss ',' in addition to "
                         return .{ .end = idx, .last_column = false };
                     },
-                    '\n' => {
+                    Newline => {
                         self.skipNextDelim();
                         r.toss(1 + 1 + idx - r.seek); // toss '\n' in addition to "
                         return .{ .end = idx, .last_column = true };
                     },
-                    '\r' => {
+                    CarriageReturn => {
                         self.skipNextDelim();
                         r.toss(2 + 1 + idx - r.seek); // toss '\r' and '\n' in addition to "
                         return .{ .end = idx, .last_column = true };
@@ -135,7 +140,7 @@ pub const Iterator = struct {
         return null;
     }
 
-    fn nextQuotedRegion(self: *Iterator) Error!Column {
+    fn nextQuotedRegion(self: *Iterator) Error!Field {
         self.reader.toss(1);
         self.needs_escape = false;
         var r = self.reader;
@@ -158,7 +163,7 @@ pub const Iterator = struct {
                     const remaining = r.buffered();
                     if (remaining.len == 0) return Error.InvalidQuotes;
                     const seek = r.seek;
-                    // NB: indexOfClosingQuoteDelim only returns if after the double quote is another character.
+                    // NB: findQuotedRegion only returns if after the double quote is another character.
                     // if it does not return, it means the remaining buffer MUST end with a double quote.
                     if (try self.findQuotedRegion(seek + content_len)) |region| {
                         return .{
@@ -168,7 +173,7 @@ pub const Iterator = struct {
                         };
                     }
                     r.toss(remaining.len);
-                    if (remaining[remaining.len - 1] != '\"') {
+                    if (remaining[remaining.len - 1] != Quote) {
                         @branchHint(.unlikely);
                         return Error.InvalidQuotes;
                     }
@@ -194,13 +199,13 @@ pub const Iterator = struct {
         while (r.vtable.stream(r, &failing_writer, .limited(1))) |n| {
             std.debug.assert(n == 0);
         } else |err| switch (err) {
-            error.WriteFailed => return Error.ColumnTooLong,
+            error.WriteFailed => return Error.FieldTooLong,
             error.ReadFailed => return Error.ReadFailed,
             error.EndOfStream => {
                 var remaining = r.buffered();
                 if (remaining.len == 0) return Error.InvalidQuotes;
                 r.toss(remaining.len);
-                if (remaining[remaining.len - 1] != '"') return Error.InvalidQuotes;
+                if (remaining[remaining.len - 1] != Quote) return Error.InvalidQuotes;
                 remaining.len -= 1;
                 return .{
                     .data = remaining,
@@ -211,9 +216,9 @@ pub const Iterator = struct {
         }
     }
 
-    inline fn handleBoundary(self: *Iterator, delim: u8, seek: usize, end: usize) Error!Column {
-        const prev_is_cr = @intFromBool((end != 0) and (self.reader.buffer[end - 1] == '\r'));
-        const is_newline = @intFromBool(delim == '\n');
+    inline fn handleBoundary(self: *Iterator, delim: u8, seek: usize, end: usize) Error!Field {
+        const prev_is_cr = @intFromBool((end != 0) and (self.reader.buffer[end - 1] == CarriageReturn));
+        const is_newline = @intFromBool(delim == Newline);
         const trim_cr = prev_is_cr & is_newline;
 
         self.reader.toss(1 + end - seek);
@@ -223,14 +228,14 @@ pub const Iterator = struct {
         };
     }
 
-    pub fn next(self: *Iterator) Error!Column {
+    pub fn next(self: *Iterator) Error!Field {
         var r = self.reader;
         {
             const seek = r.seek;
             if (self.nextDelimPos(seek)) |end| {
                 @branchHint(.likely);
                 const delim = r.buffer[end];
-                if (delim == '"') return self.nextQuotedRegion();
+                if (delim == Quote) return self.nextQuotedRegion();
 
                 return self.handleBoundary(delim, seek, end);
             }
@@ -251,7 +256,7 @@ pub const Iterator = struct {
             const seek = r.seek;
             if (self.nextDelimPos(seek + content_len)) |end| {
                 const delim = r.buffer[end];
-                if (delim == '"') return self.nextQuotedRegion();
+                if (delim == Quote) return self.nextQuotedRegion();
 
                 return self.handleBoundary(delim, seek, end);
             }
@@ -261,7 +266,7 @@ pub const Iterator = struct {
         while (r.vtable.stream(r, &failing_writer, .limited(1))) |n| {
             std.debug.assert(n == 0);
         } else |err| switch (err) {
-            error.WriteFailed => return error.ColumnTooLong,
+            error.WriteFailed => return Error.FieldTooLong,
             error.ReadFailed => |e| return e,
             error.EndOfStream => {
                 const remaining = r.buffer[r.seek..r.end];
@@ -294,7 +299,7 @@ pub const Iterator = struct {
             while (i + vector_len < r.end) : (i += vector_len) {
                 const input: Vector = r.buffer[i..r.end][0..vector_len].*;
                 const q = input == QuoteMask;
-                const comma = input == CommaMask;
+                const comma = input == DelimiterMask;
                 const newline = input == NewLineMask;
                 const delim = (comma | q | newline);
                 self.vector = @bitCast(delim);
