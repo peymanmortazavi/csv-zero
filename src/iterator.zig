@@ -1,4 +1,5 @@
 const std = @import("std");
+const simd = @import("simd.zig");
 const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
@@ -6,7 +7,7 @@ const Allocator = std.mem.Allocator;
 pub const Dialect = struct {
     quote: u8 = '"',
     delimiter: u8 = ',',
-    vector_size: ?comptime_int = std.simd.suggestVectorLength(u8),
+    vector_length: ?comptime_int = simd.suggestVectorLength(),
 };
 
 pub fn Csv(comptime dialect: Dialect) type {
@@ -21,14 +22,14 @@ pub fn Csv(comptime dialect: Dialect) type {
         const Newline = '\n';
         const CarriageReturn = '\r';
 
-        const Bitmask = if (dialect.vector_size) |len| std.meta.Int(.unsigned, len) else void;
-        const Vector = if (dialect.vector_size) |len| @Vector(len, u8) else void;
+        const Bitmask = if (dialect.vector_length) |len| std.meta.Int(.unsigned, len) else void;
+        const Vector = if (dialect.vector_length) |len| @Vector(len, u8) else void;
 
         const QuoteMask: Vector = @splat(dialect.quote);
         const DelimiterMask: Vector = @splat(dialect.delimiter);
         const NewLineMask: Vector = @splat(Newline);
 
-        const use_vectors = dialect.vector_size != null;
+        const use_vectors = dialect.vector_length != null;
 
         const is_delim = blk: {
             var t = [_]bool{false} ** 256;
@@ -300,7 +301,7 @@ pub fn Csv(comptime dialect: Dialect) type {
 
             var i: usize = start_pos;
 
-            if (dialect.vector_size) |vector_len| {
+            if (dialect.vector_length) |vector_len| {
                 while (i + vector_len < r.end) : (i += vector_len) {
                     const input: Vector = r.buffer[i..r.end][0..vector_len].*;
                     const q = input == QuoteMask;
