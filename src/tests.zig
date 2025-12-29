@@ -222,7 +222,7 @@ test "iterator" {
         .{
             .path = "bad_column_too_long.csv",
             .expected_error = .{
-                .err = csvz.Iterator.Error.ColumnTooLong,
+                .err = csvz.Iterator.Error.FieldTooLong,
                 .row = 1,
                 .col = 0,
             },
@@ -234,7 +234,7 @@ test "iterator" {
         .{
             .path = "bad_column_too_long_quote.csv",
             .expected_error = .{
-                .err = csvz.Iterator.Error.ColumnTooLong,
+                .err = csvz.Iterator.Error.FieldTooLong,
                 .row = 1,
                 .col = 0,
             },
