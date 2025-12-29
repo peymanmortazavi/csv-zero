@@ -4,12 +4,44 @@ const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 const Allocator = std.mem.Allocator;
 
+/// Configuration for CSV parsing behavior.
+///
+/// Use this to customize how CSV data is parsed, including the quote character,
+/// field delimiter, and SIMD vector length for performance optimization.
+///
+/// Example:
+///     const CustomIterator = Csv(.{.quote = '\'', .delimiter = ';'});
 pub const Dialect = struct {
+    /// Character used to quote fields containing special characters (default: '"')
     quote: u8 = '"',
+    /// Character used to separate fields (default: ',')
     delimiter: u8 = ',',
+    /// SIMD vector length for optimized parsing. Set to null to disable SIMD.
+    /// By default, uses the optimal vector length for your platform.
     vector_length: ?comptime_int = simd.suggestVectorLength(),
 };
 
+/// Creates a CSV iterator type configured with the specified dialect.
+///
+/// This is a compile-time function that returns a type specialized for itearting
+/// CSV fields according to the provided dialect configuration. The returned type
+/// includes SIMD optimizations when vector_length is set.
+///
+/// Basic usage:
+/// ```zig
+///     const CsvParser = Csv(.{}); // Use default dialect
+///     var iterator = CsvParser.init(&reader);
+///
+///     while (true) {
+///         const col = csvit.next() catch |err| switch (err) {
+///             csvz.Iterator.Error.EOF => break,
+///             else => |e| return e,
+///         };
+///         // col.data <- raw value which might include unescaped quotes.
+///         // col.unescaped() <- note that this function has a side-effect.
+///         std.debug.print("col: {s}, last? {}\n", .{ col.unescaped(), col.last_column });
+///     }
+/// ```
 pub fn Csv(comptime dialect: Dialect) type {
     return struct {
         reader: *std.Io.Reader,
@@ -39,33 +71,55 @@ pub fn Csv(comptime dialect: Dialect) type {
             break :blk t;
         };
 
+        /// Errors that can occur during CSV parsing.
+        ///
+        /// - ReadFailed: The underlying reader encountered an error
+        /// - InvalidQuotes: Malformed quoted fields (e.g., unmatched quotes)
+        /// - FieldTooLong: A field exceeded the reader's buffer capacity
+        /// - EOF: Reached the end of the CSV file (not an error condition in normal use)
         pub const Error = error{ ReadFailed, InvalidQuotes, FieldTooLong, EOF };
 
         const QuotedRegion = struct {
+            /// position of the matching quote character in the buffer.
             end: usize,
+            /// whether or not quoted region is the last column in the row.
             last_column: bool,
         };
 
-        /// Field represents a CSV-field.
-        /// Its contents are guaranteed to remain valid until next call to the `next()` function.
+        /// Represents a single CSV field.
+        ///
+        /// Fields are returned by the `next()` method and remain valid only until
+        /// the next call to `next()`. If you need to keep field data longer, copy it.
+        ///
+        /// The `data` field contains the raw field content, which may include escaped
+        /// quotes (e.g., `""` representing a single `"`). Use `unescaped()` to get
+        /// the final value with escape sequences resolved.
         pub const Field = struct {
-            /// the raw column data which is a slice of the buffer in the reader.
-            /// this may need escaping, needs_escape holds whether or not escaping is necessary.
-            /// use unescaped to get the unescaped value regardless.
+            /// Raw field data as a slice of the reader's buffer.
+            /// May contain escaped quotes if `needs_escape` is true.
+            /// For the final value, use `unescaped()` instead.
             data: []u8,
-            /// indicates whether or not this is the last column in the current row.
+            /// True if this field is the last column in the current row.
+            /// Use this to detect row boundaries when iterating through fields.
             last_column: bool,
-            /// indicates whether or not escaped double quotes are present in the column.
+            /// True if the field contains escaped double quotes (e.g., `""` for `"`).
+            /// When true, call `unescaped()` to remove the escape characters.
             needs_escape: bool = false,
 
+            /// Compares two fields for equality based on data, last_column, and needs_escape.
             pub fn eql(self: *const Field, other: Field) bool {
                 return std.mem.eql(u8, self.data, other.data) and
                     self.last_column == other.last_column and
                     self.needs_escape == self.needs_escape;
             }
 
-            /// remove the escape characters in the text if necessary and return the column.
-            /// this method has a side-effect and will overwrite the column data.
+            /// Returns the unescaped field data with escape sequences removed.
+            ///
+            /// This method removes CSV escape sequences in-place (e.g., converts `""` to `"`).
+            /// After calling this method, `needs_escape` is set to false and `data` contains
+            /// the unescaped result. Subsequent calls return the same unescaped data.
+            ///
+            /// Note: This modifies the field in-place by overwriting the internal buffer.
             pub fn unescaped(self: *Field) []u8 {
                 if (self.needs_escape) {
                     self.needs_escape = false;
@@ -86,12 +140,23 @@ pub fn Csv(comptime dialect: Dialect) type {
             }
         };
 
+        /// Initializes a CSV iterator with the given reader.
+        ///
+        /// The reader must remain valid for the lifetime of the iterator.
+        /// The iterator takes a pointer to the reader and uses its internal
+        /// buffer for zero-copy field access.
+        ///
+        /// Example:
+        /// ```zig
+        /// var reader = std.Io.Reader.fixed(...);
+        /// var it = Iterator.init(&reader);
+        /// ```
         pub fn init(reader: *std.Io.Reader) Self {
             return .{ .reader = reader };
         }
 
         /// finds the end of the quoted region (assuming the first double quote is alerady consumed).
-        /// it only returns the quoted region is the character after the double quote is known. If the double
+        /// it only returns the quoted region if the character after the double quote is known. If the double
         /// quote is the very last character in the buffer and in the file, then it needs to be handled outside of this
         /// function.
         inline fn findQuotedRegion(self: *Self, start_index: usize) Error!?QuotedRegion {
@@ -169,8 +234,6 @@ pub fn Csv(comptime dialect: Dialect) type {
                         const remaining = r.buffered();
                         if (remaining.len == 0) return Error.InvalidQuotes;
                         const seek = r.seek;
-                        // NB: findQuotedRegion only returns if after the double quote is another character.
-                        // if it does not return, it means the remaining buffer MUST end with a double quote.
                         if (try self.findQuotedRegion(seek + content_len)) |region| {
                             return .{
                                 .data = r.buffer[seek..region.end],
@@ -179,6 +242,8 @@ pub fn Csv(comptime dialect: Dialect) type {
                             };
                         }
                         r.toss(remaining.len);
+                        // NB: findQuotedRegion only returns if after the double quote is another character.
+                        // if it does not return, it means the remaining buffer MUST end with a double quote.
                         if (remaining[remaining.len - 1] != dialect.quote) {
                             @branchHint(.unlikely);
                             return Error.InvalidQuotes;
@@ -234,6 +299,35 @@ pub fn Csv(comptime dialect: Dialect) type {
             };
         }
 
+        /// Advances the iterator and returns the next CSV field.
+        ///
+        /// This method is the primary way to iterate through CSV data. Each call returns
+        /// one field, and you can detect row boundaries using the `last_column` flag on
+        /// the returned Field.
+        ///
+        /// The returned Field's data is a slice into the reader's internal buffer, making
+        /// this a zero-copy operation. The data remains valid only until the next call to
+        /// `next()`, so copy it if you need to retain it longer.
+        ///
+        /// When the end of the file is reached, returns `error.EOF`, which is the normal
+        /// termination condition (not an error in typical usage).
+        ///
+        /// Example iterating through all fields:
+        /// ```zig
+        /// while (true) {
+        ///     var field = it.next() catch |err| switch (err) {
+        ///         error.EOF => break,
+        ///         else => |e| // handle the err
+        ///     };
+        ///     const value = field.unescaped();
+        ///     std.debug.print("{s}", .{value});
+        ///     if (field.last_column) {
+        ///         std.debug.print("\n", .{}); // End of row
+        ///     } else {
+        ///         std.debug.print(",", .{});
+        ///     }
+        /// }
+        /// ```
         pub fn next(self: *Self) Error!Field {
             var r = self.reader;
             {
