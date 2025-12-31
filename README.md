@@ -154,8 +154,6 @@ const owned = try allocator.dupe(u8, field.unescaped());
 
 This tradeoff is fundamental to zero-allocation parsing.
 
----
-
 ## Fixed Buffers
 
 Using a fixed reader keeps field slices valid indefinitely:
@@ -167,8 +165,6 @@ var it = csvz.Iterator.init(&reader);
 ```
 
 Since the buffer never changes, fields remain valid across iterations.
-
----
 
 ## Escaping and Unescaping
 
@@ -192,8 +188,6 @@ Calling `unescaped()` overwrites the field data in the buffer.
 If you prefer not to mutate the buffer or to use your own approach, you can use `needs_unescape` to learn if any
 unescaping is necessary at all and access the raw field bytes via `field.data`.
 
----
-
 ## Custom Delimiters (e.g. TSV)
 
 You can define specialized iterators:
@@ -201,8 +195,6 @@ You can define specialized iterators:
 ```zig
 const TsvIterator = csvz.Csv(.{ .delimiter = '\t' });
 ```
-
----
 
 ## SIMD Configuration
 
@@ -216,16 +208,6 @@ const WideSimd = csvz.Csv(.{ .vector_length = 128 });
 
 You can use **csv-race** repo to benchmark different vector lengths for your CPU architecture and use the best number
 for your needs. Though if you do see marginal benefits, I ask that you submit a PR so everyone can benefit!
-
----
-
-## Performance Characteristics
-
-- Zero heap allocations
-- SIMD-accelerated scanning
-- Minimal branching on hot paths
-
-The goal is **predictable, explainable performance**, not opaque cleverness.
 
 ---
 
