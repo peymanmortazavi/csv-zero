@@ -45,7 +45,7 @@ pub const Dialect = struct {
 pub fn Csv(comptime dialect: Dialect) type {
     return struct {
         reader: *std.Io.Reader,
-        needs_escape: bool = false,
+        needs_unescape: bool = false,
         quote_pending: bool = false,
         vector: Bitmask = if (use_vectors) 0 else {},
         vector_offset: if (use_vectors) usize else void = if (use_vectors) 0 else {},
@@ -96,7 +96,7 @@ pub fn Csv(comptime dialect: Dialect) type {
         /// the final value with escape sequences resolved.
         pub const Field = struct {
             /// Raw field data as a slice of the reader's buffer.
-            /// May contain escaped quotes if `needs_escape` is true.
+            /// Contains escaped quotes if `needs_unescape` is true.
             /// For the final value, use `unescaped()` instead.
             data: []u8,
             /// True if this field is the last column in the current row.
@@ -104,25 +104,25 @@ pub fn Csv(comptime dialect: Dialect) type {
             last_column: bool,
             /// True if the field contains escaped double quotes (e.g., `""` for `"`).
             /// When true, call `unescaped()` to remove the escape characters.
-            needs_escape: bool = false,
+            needs_unescape: bool = false,
 
-            /// Compares two fields for equality based on data, last_column, and needs_escape.
+            /// Compares two fields for equality based on data, last_column, and needs_unescape.
             pub fn eql(self: *const Field, other: Field) bool {
                 return std.mem.eql(u8, self.data, other.data) and
                     self.last_column == other.last_column and
-                    self.needs_escape == self.needs_escape;
+                    self.needs_unescape == self.needs_unescape;
             }
 
             /// Returns the unescaped field data with escape sequences removed.
             ///
             /// This method removes CSV escape sequences in-place (e.g., converts `""` to `"`).
-            /// After calling this method, `needs_escape` is set to false and `data` contains
+            /// After calling this method, `needs_unescape` is set to false and `data` contains
             /// the unescaped result. Subsequent calls return the same unescaped data.
             ///
             /// Note: This modifies the field in-place by overwriting the internal buffer.
             pub fn unescaped(self: *Field) []u8 {
-                if (self.needs_escape) {
-                    self.needs_escape = false;
+                if (self.needs_unescape) {
+                    self.needs_unescape = false;
                     self.data = unescapeInPlace(dialect.quote, self.data);
                     return self.data;
                 }
@@ -134,9 +134,9 @@ pub fn Csv(comptime dialect: Dialect) type {
                 try writer.print("{s} [last col={}]", .{ self.data, self.last_column });
             }
 
-            fn new(ally: Allocator, col: []const u8, last_col: bool, needs_escape: bool) Allocator.Error!Field {
+            fn new(ally: Allocator, col: []const u8, last_col: bool, needs_unescape: bool) Allocator.Error!Field {
                 const c = try ally.dupe(u8, col);
-                return .{ .data = c, .last_column = last_col, .needs_escape = needs_escape };
+                return .{ .data = c, .last_column = last_col, .needs_unescape = needs_unescape };
             }
         };
 
@@ -175,7 +175,7 @@ pub fn Csv(comptime dialect: Dialect) type {
 
                     switch (data[idx + 1]) {
                         dialect.quote => {
-                            self.needs_escape = true;
+                            self.needs_unescape = true;
                             self.skipNextDelim();
                             i = idx + 2;
                         },
@@ -213,7 +213,7 @@ pub fn Csv(comptime dialect: Dialect) type {
 
         fn nextQuotedRegion(self: *Self) Error!Field {
             self.reader.toss(1);
-            self.needs_escape = false;
+            self.needs_unescape = false;
             var r = self.reader;
             {
                 const seek = r.seek;
@@ -221,7 +221,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                     return .{
                         .data = r.buffer[seek..region.end],
                         .last_column = region.last_column,
-                        .needs_escape = self.needs_escape,
+                        .needs_unescape = self.needs_unescape,
                     };
                 }
             }
@@ -238,7 +238,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                             return .{
                                 .data = r.buffer[seek..region.end],
                                 .last_column = region.last_column,
-                                .needs_escape = self.needs_escape,
+                                .needs_unescape = self.needs_unescape,
                             };
                         }
                         r.toss(remaining.len);
@@ -251,7 +251,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                         return .{
                             .data = remaining[0 .. remaining.len - 1],
                             .last_column = true,
-                            .needs_escape = self.needs_escape,
+                            .needs_unescape = self.needs_unescape,
                         };
                     },
                     else => |err| return err,
@@ -261,7 +261,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                     return .{
                         .data = r.buffer[seek..region.end],
                         .last_column = region.last_column,
-                        .needs_escape = self.needs_escape,
+                        .needs_unescape = self.needs_unescape,
                     };
                 }
             }
@@ -281,7 +281,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                     return .{
                         .data = remaining,
                         .last_column = true,
-                        .needs_escape = self.needs_escape,
+                        .needs_unescape = self.needs_unescape,
                     };
                 },
             }
