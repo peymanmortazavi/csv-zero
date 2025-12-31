@@ -36,8 +36,6 @@ Each field is returned as a slice into an internal buffer. No memory is allocate
 
 These omissions are deliberate. csv-zero avoids hidden costs and ambiguous behavior.
 
----
-
 ## Why a Field Iterator?
 
 csv-zero exposes a **field iterator by design**.
@@ -49,8 +47,6 @@ This approach:
 - Avoids edge cases where a single large row exceeds buffer limits
 
 If you want records, structs, or column-oriented storage, you build them explicitly on top. Helper utilities may be added in the future, but the core API will remain field-based.
-
----
 
 ## CSV Validity Rules
 
