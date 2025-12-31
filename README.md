@@ -6,8 +6,6 @@ It intentionally does less than typical CSV libraries. There is no record abstra
 
 This library is designed for systems engineers and performance-sensitive tooling where control and transparency matter more than convenience.
 
----
-
 ## Core Ideas
 
 - **Field-by-field iteration**, not records
@@ -19,8 +17,6 @@ This library is designed for systems engineers and performance-sensitive tooling
 
 csv-zero exposes CSV parsing as a small, composable primitive rather than a high-level abstraction.
 
----
-
 ## What csv-zero Provides
 
 - Incremental parsing from a `*std.Io.Reader`
@@ -30,8 +26,6 @@ csv-zero exposes CSV parsing as a small, composable primitive rather than a high
 - SIMD-accelerated scanning (configurable)
 
 Each field is returned as a slice into an internal buffer. No memory is allocated unless you explicitly copy data.
-
----
 
 ## What csv-zero Does _Not_ Do
 
