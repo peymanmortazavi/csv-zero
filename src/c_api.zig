@@ -1,5 +1,8 @@
 const std = @import("std");
 const csvz = @import("root.zig");
+const c = @cImport({
+    @cInclude("stdio.h");
+});
 
 const FileSource = struct {
     handle: std.fs.File,
@@ -48,12 +51,26 @@ export fn csvz_iter_from_file(filename: [*:0]const u8, buffer: [*]u8, len: usize
     return it;
 }
 
+export fn csvz_iter_from_fd(stream: *c.FILE, buffer: [*]u8, len: usize) callconv(.c) ?*Iterator {
+    var it: *Iterator = std.heap.c_allocator.create(Iterator) catch {
+        last_error = .OOM;
+        return null;
+    };
+    const file: std.fs.File = .{ .handle = c.fileno(stream) };
+    it.source.fd = .{ .handle = file, .reader = file.reader(buffer[0..len]) };
+    it.iterator = csvz.Iterator.init(&it.source.fd.reader.interface);
+    return it;
+}
+
 export fn csvz_iter_next(it: *Iterator, field: *Field) callconv(.c) Error {
-    const item = it.iterator.next() catch |err| switch (err) {
-        csvz.Iterator.Error.EOF => return Error.EOF,
-        csvz.Iterator.Error.FieldTooLong => return Error.FieldTooLong,
-        csvz.Iterator.Error.InvalidQuotes => return Error.InvalidQuotes,
-        csvz.Iterator.Error.ReadFailed => return Error.ReadFailed,
+    const item = it.iterator.next() catch |err| {
+        @branchHint(.unlikely);
+        switch (err) {
+            csvz.Iterator.Error.EOF => return Error.EOF,
+            csvz.Iterator.Error.FieldTooLong => return Error.FieldTooLong,
+            csvz.Iterator.Error.InvalidQuotes => return Error.InvalidQuotes,
+            csvz.Iterator.Error.ReadFailed => return Error.ReadFailed,
+        }
     };
     field.data = item.data.ptr;
     field.len = item.data.len;
@@ -62,20 +79,17 @@ export fn csvz_iter_next(it: *Iterator, field: *Field) callconv(.c) Error {
     return .NoError;
 }
 
+export fn csvz_unescape_in_place(data: [*]u8, len: usize) usize {
+    const it = @import("iterator.zig");
+    return it.unescapeInPlace('"', data[0..len]).len;
+}
+
 export fn csvz_iter_free(it: *Iterator) callconv(.c) void {
     switch (it.source) {
         .file => |f| f.handle.close(),
         else => {},
     }
     std.heap.c_allocator.destroy(it);
-}
-
-export fn csvz_iter_count(it: *Iterator) callconv(.c) c_ulong {
-    var count: c_ulong = 0;
-    while (it.iterator.next()) |_| {
-        count += 1;
-    } else |_| return count;
-    return count;
 }
 
 export fn csvz_err() callconv(.c) Error {
