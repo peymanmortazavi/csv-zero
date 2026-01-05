@@ -23,11 +23,24 @@ typedef struct {
   int needs_unescape;
 } csvz_field;
 
+typedef enum {
+  CSVZ_READ_STATUS_OK,
+  CSVZ_READ_STATUS_EOF,
+  CSVZ_READ_STATUS_ERROR,
+} csvz_read_status;
+
+typedef struct {
+  size_t bytes_read;
+  csvz_read_status status;
+} csvz_read_result;
+
 csvz_iterator *csvz_iter_from_file(const char *filename, char *buffer,
                                    size_t len);
 csvz_iterator *csvz_iter_from_fd(FILE *fd, char *buffer, size_t len);
+csvz_iterator *csvz_iter_from_bytes(char *data, size_t len);
 csvz_iterator *csvz_iter_from_callback(void *context,
-                                       int (*read)(void *, int, int),
+                                       csvz_read_result (*read)(void *, char *,
+                                                                size_t),
                                        char *buffer, size_t len);
 void csvz_iter_free(csvz_iterator *);
 size_t csvz_unescape_in_place(char *data, size_t len);
