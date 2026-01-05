@@ -421,7 +421,9 @@ pub fn Csv(comptime dialect: Dialect) type {
     };
 }
 
-fn unescapeInPlace(comptime quote: u8, data: []u8) []u8 {
+/// Removes escape sequences from a string slice in-place by overwriting the data.
+/// Returns a smaller slice containing the unescaped string content.
+pub fn unescapeInPlace(comptime quote: u8, data: []u8) []u8 {
     var search_cursor: usize = 0;
     var write_cursor: usize = 0;
     var count: usize = 0;
