@@ -388,7 +388,7 @@ pub fn Csv(comptime dialect: Dialect) type {
             const r = self.reader;
             if (use_vectors) {
                 if (self.vector != 0) {
-                    const idx = if (builtin.cpu.arch.endian == .little) @ctz(self.vector) else @clz(self.vector);
+                    const idx = if (builtin.cpu.arch.endian() == .little) @ctz(self.vector) else @clz(self.vector);
                     self.vector &= self.vector - 1;
                     return idx + self.vector_offset;
                 }
@@ -405,7 +405,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                     const delim = (comma | q | newline);
                     self.vector = @bitCast(delim);
                     if (self.vector != 0) {
-                        const idx = if (builtin.cpu.arch.endian == .little) @ctz(self.vector) else @clz(self.vector);
+                        const idx = if (builtin.cpu.arch.endian() == .little) @ctz(self.vector) else @clz(self.vector);
                         self.vector_offset = i;
                         self.vector &= self.vector - 1;
                         return i + idx;
