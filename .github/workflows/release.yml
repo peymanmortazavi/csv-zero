@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+
+  build-linux:
+    name: Build Linux
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - zig_target: x86-linux
+            archive_name: linux-x86
+          - zig_target: x86_64-linux
+            archive_name: linux-x86_64
+          - zig_target: aarch64-linux
+            archive_name: linux-aarch64
+          - zig_target: riscv64-linux
+            archive_name: linux-riscv64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build static library
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.zig_target }}
+
+      - name: Build shared library
+        run: zig build -Doptimize=ReleaseFast -Dshared=true -Dtarget=${{ matrix.zig_target }}
+
+      - name: Prepare artifacts
+        run: |
+          tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ matrix.archive_name }}.tar.gz
+          asset_name: ${{ matrix.archive_name }}.tar.gz
+          asset_content_type: application/gzip
+
+  build-mac:
+    name: Build Mac
+    needs: create-release
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - zig_target: aarch64-macos
+            archive_name: macos-aarch64
+          - zig_target: x86_64-macos
+            archive_name: macos-x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build static library
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.zig_target }}
+
+      - name: Build shared library
+        run: zig build -Doptimize=ReleaseFast -Dshared=true -Dtarget=${{ matrix.zig_target }}
+
+      - name: Prepare artifacts
+        run: |
+          tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ matrix.archive_name }}.tar.gz
+          asset_name: ${{ matrix.archive_name }}.tar.gz
+          asset_content_type: application/gzip
