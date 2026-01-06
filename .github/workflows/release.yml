@@ -42,12 +42,12 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
+          tar czf csvzero-${{ matrix.archive_name }}.tar.gz -C zig-out .
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.archive_name }}.tar.gz
+          files: csvzero-${{ matrix.archive_name }}.tar.gz
           prerelease: ${{ contains(github.ref, '-') }}
           generate_release_notes: true
 
@@ -79,11 +79,11 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
+          tar czf csvzero-${{ matrix.archive_name }}.tar.gz -C zig-out .
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.archive_name }}.tar.gz
+          files: csvzero-${{ matrix.archive_name }}.tar.gz
           prerelease: ${{ contains(github.ref, '-') }}
           generate_release_notes: true
