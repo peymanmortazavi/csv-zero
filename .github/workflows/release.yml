@@ -6,32 +6,12 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
 
+permissions:
+  contents: write
+
 jobs:
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
-
   build-linux:
     name: Build Linux
-    needs: create-release
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -65,18 +45,14 @@ jobs:
           tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.archive_name }}.tar.gz
-          asset_name: ${{ matrix.archive_name }}.tar.gz
-          asset_content_type: application/gzip
+          files: ${{ matrix.archive_name }}.tar.gz
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
 
   build-mac:
     name: Build Mac
-    needs: create-release
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -106,11 +82,8 @@ jobs:
           tar czf ${{ matrix.archive_name }}.tar.gz -C zig-out .
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.archive_name }}.tar.gz
-          asset_name: ${{ matrix.archive_name }}.tar.gz
-          asset_content_type: application/gzip
+          files: ${{ matrix.archive_name }}.tar.gz
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
