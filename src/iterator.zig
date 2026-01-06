@@ -190,11 +190,12 @@ pub fn Csv(comptime dialect: Dialect) type {
                             return .{ .end = idx, .last_column = true };
                         },
                         CarriageReturn => {
-                            self.skipNextDelim();
                             if (idx + 2 == data.len) {
+                                @branchHint(.unlikely);
                                 self.quote_pending = true;
                                 return null;
                             }
+                            self.skipNextDelim();
                             r.toss(2 + 1 + idx - r.seek); // toss '\r' and '\n' in addition to "
                             return .{ .end = idx, .last_column = true };
                         },
