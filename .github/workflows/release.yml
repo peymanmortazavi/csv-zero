@@ -88,6 +88,45 @@ jobs:
           path: csvzero-${{ matrix.archive_name }}.tar.gz
           retention-days: 1
 
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - zig_target: x86-windows
+            archive_name: windows-x86
+          - zig_target: x86_64-windows
+            archive_name: windows-x86_64
+          - zig_target: aarch64-windows
+            archive_name: windows-aarch64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build static library
+        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.zig_target }}
+
+      - name: Build shared library
+        run: zig build -Doptimize=ReleaseFast -Dshared=true -Dtarget=${{ matrix.zig_target }}
+
+      - name: Prepare artifacts
+        run: |
+          cd zig-out && zip -r ../csvzero-${{ matrix.archive_name }}.zip . && cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: csvzero-${{ matrix.archive_name }}
+          path: csvzero-${{ matrix.archive_name }}.zip
+          retention-days: 1
+
   release:
     name: Create Release
     needs: [build-linux, build-mac]
@@ -102,6 +141,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.tar.gz
+          files: artifacts/*.{tar.gz,zip}
           prerelease: ${{ contains(github.ref, '-') }}
           generate_release_notes: true
