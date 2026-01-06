@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const simd = @import("simd.zig");
 const Reader = std.Io.Reader;
@@ -192,6 +191,10 @@ pub fn Csv(comptime dialect: Dialect) type {
                         },
                         CarriageReturn => {
                             self.skipNextDelim();
+                            if (idx + 2 == data.len) {
+                                self.quote_pending = true;
+                                return null;
+                            }
                             r.toss(2 + 1 + idx - r.seek); // toss '\r' and '\n' in addition to "
                             return .{ .end = idx, .last_column = true };
                         },
@@ -243,14 +246,17 @@ pub fn Csv(comptime dialect: Dialect) type {
                             };
                         }
                         r.toss(remaining.len);
+                        var end = remaining.len - 1;
+                        if (remaining[end] == Newline) end -= 1;
+                        if (remaining[end] == CarriageReturn) end -= 1;
                         // NB: findQuotedRegion only returns if after the double quote is another character.
                         // if it does not return, it means the remaining buffer MUST end with a double quote.
-                        if (remaining[remaining.len - 1] != dialect.quote) {
+                        if (remaining[end] != dialect.quote) {
                             @branchHint(.unlikely);
                             return Error.InvalidQuotes;
                         }
                         return .{
-                            .data = remaining[0 .. remaining.len - 1],
+                            .data = remaining[0..end],
                             .last_column = true,
                             .needs_unescape = self.needs_unescape,
                         };
@@ -388,7 +394,7 @@ pub fn Csv(comptime dialect: Dialect) type {
             const r = self.reader;
             if (use_vectors) {
                 if (self.vector != 0) {
-                    const idx = if (builtin.cpu.arch.endian() == .little) @ctz(self.vector) else @clz(self.vector);
+                    const idx = @ctz(self.vector);
                     self.vector &= self.vector - 1;
                     return idx + self.vector_offset;
                 }
@@ -405,7 +411,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                     const delim = (comma | q | newline);
                     self.vector = @bitCast(delim);
                     if (self.vector != 0) {
-                        const idx = if (builtin.cpu.arch.endian() == .little) @ctz(self.vector) else @clz(self.vector);
+                        const idx = @ctz(self.vector);
                         self.vector_offset = i;
                         self.vector &= self.vector - 1;
                         return i + idx;
