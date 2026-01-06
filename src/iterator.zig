@@ -247,8 +247,8 @@ pub fn Csv(comptime dialect: Dialect) type {
                         }
                         r.toss(remaining.len);
                         var end = remaining.len - 1;
-                        if (remaining[end] == Newline) end -= 1;
-                        if (remaining[end] == CarriageReturn) end -= 1;
+                        if (end > 0 and remaining[end] == Newline) end -= 1;
+                        if (end > 0 and remaining[end] == CarriageReturn) end -= 1;
                         // NB: findQuotedRegion only returns if after the double quote is another character.
                         // if it does not return, it means the remaining buffer MUST end with a double quote.
                         if (remaining[end] != dialect.quote) {
