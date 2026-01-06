@@ -1,8 +1,12 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const csvz = @import("root.zig");
 
 const c = @cImport({
     @cInclude("stdio.h");
+    if (builtin.os.tag == .windows) {
+        @cInclude("io.h");
+    }
 });
 
 const FileSource = struct {
@@ -62,8 +66,8 @@ const CallbackSource = struct {
 const Field = extern struct {
     data: [*]u8,
     len: usize,
-    last_column: bool,
-    needs_unescape: bool,
+    last_column: c_int,
+    needs_unescape: c_int,
 };
 
 const Error = enum(c_int) {
@@ -74,6 +78,7 @@ const Error = enum(c_int) {
     InvalidQuotes,
     ReadFailed,
     OpenError,
+    InvalidFile,
 };
 
 threadlocal var last_error: Error = .NoError;
@@ -97,7 +102,7 @@ export fn csvz_iter_from_file(filename: [*:0]const u8, buffer: [*]u8, len: usize
         last_error = .OpenError;
         return null;
     };
-    it.source.file = .{ .handle = file, .reader = file.reader(buffer[0..len]) };
+    it.source = .{ .file = .{ .handle = file, .reader = file.reader(buffer[0..len]) } };
     it.iterator = csvz.Iterator.init(&it.source.file.reader.interface);
     last_error = .NoError;
     return it;
@@ -108,8 +113,26 @@ export fn csvz_iter_from_fd(stream: *c.FILE, buffer: [*]u8, len: usize) callconv
         last_error = .OOM;
         return null;
     };
-    const file: std.fs.File = .{ .handle = c.fileno(stream) };
-    it.source.fd = .{ .handle = file, .reader = file.reader(buffer[0..len]) };
+    const file: std.fs.File = .{ .handle = switch (builtin.os.tag) {
+        .windows => blk: {
+            const file_no = c._fileno(stream);
+            const handle = c._get_osfhandle(file_no);
+            if (handle < 0) {
+                last_error = .InvalidFile;
+                return null;
+            }
+            break :blk @ptrFromInt(@as(usize, @intCast(handle)));
+        },
+        else => blk: {
+            const file_no = c.fileno(stream);
+            if (file_no < 0) {
+                last_error = .InvalidFile;
+                return null;
+            }
+            break :blk file_no;
+        },
+    } };
+    it.source = .{ .fd = .{ .handle = file, .reader = file.reader(buffer[0..len]) } };
     it.iterator = csvz.Iterator.init(&it.source.fd.reader.interface);
     last_error = .NoError;
     return it;
@@ -120,7 +143,7 @@ export fn csvz_iter_from_bytes(buffer: [*]u8, len: usize) callconv(.c) ?*Iterato
         last_error = .OOM;
         return null;
     };
-    it.source.fixed_buffer = std.Io.Reader.fixed(buffer[0..len]);
+    it.source = .{ .fixed_buffer = std.Io.Reader.fixed(buffer[0..len]) };
     it.iterator = csvz.Iterator.init(&it.source.fixed_buffer);
     last_error = .NoError;
     return it;
@@ -136,7 +159,7 @@ export fn csvz_iter_from_callback(
         last_error = .OOM;
         return null;
     };
-    it.source.callback = .init(ctx, cb, buffer[0..len]);
+    it.source = .{ .callback = .init(ctx, cb, buffer[0..len]) };
     it.iterator = csvz.Iterator.init(&it.source.callback.interface);
     last_error = .NoError;
     return it;
@@ -154,8 +177,8 @@ export fn csvz_iter_next(it: *Iterator, field: *Field) callconv(.c) Error {
     };
     field.data = item.data.ptr;
     field.len = item.data.len;
-    field.last_column = item.last_column;
-    field.needs_unescape = item.needs_unescape;
+    field.last_column = if (item.last_column) 1 else 0;
+    field.needs_unescape = if (item.needs_unescape) 1 else 0;
     return .NoError;
 }
 

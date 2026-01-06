@@ -190,6 +190,11 @@ pub fn Csv(comptime dialect: Dialect) type {
                             return .{ .end = idx, .last_column = true };
                         },
                         CarriageReturn => {
+                            if (idx + 2 == data.len) {
+                                @branchHint(.unlikely);
+                                self.quote_pending = true;
+                                return null;
+                            }
                             self.skipNextDelim();
                             r.toss(2 + 1 + idx - r.seek); // toss '\r' and '\n' in addition to "
                             return .{ .end = idx, .last_column = true };
@@ -242,14 +247,17 @@ pub fn Csv(comptime dialect: Dialect) type {
                             };
                         }
                         r.toss(remaining.len);
+                        var end = remaining.len - 1;
+                        if (end > 0 and remaining[end] == Newline) end -= 1;
+                        if (end > 0 and remaining[end] == CarriageReturn) end -= 1;
                         // NB: findQuotedRegion only returns if after the double quote is another character.
                         // if it does not return, it means the remaining buffer MUST end with a double quote.
-                        if (remaining[remaining.len - 1] != dialect.quote) {
+                        if (remaining[end] != dialect.quote) {
                             @branchHint(.unlikely);
                             return Error.InvalidQuotes;
                         }
                         return .{
-                            .data = remaining[0 .. remaining.len - 1],
+                            .data = remaining[0..end],
                             .last_column = true,
                             .needs_unescape = self.needs_unescape,
                         };
