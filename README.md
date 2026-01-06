@@ -223,6 +223,13 @@ designed to allow you to run your own benchmarks.
 
 ---
 
+## C API
+
+A C API interface is available, though it underperforms compared to the Zig implementation. This performance gap exists because the compiler lacks visibility into implementation details when crossing language boundaries, preventing optimizations that would otherwise be possible with native Zig code.
+Despite this limitation, the C API still outperforms all libraries currently included in the `csv-race` benchmark repository. See [C API](C_API.md) for complete API documentation.
+
+---
+
 ## Limitations (By Design)
 
 - Fields must fit within the reader buffer
