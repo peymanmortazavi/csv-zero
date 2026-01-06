@@ -118,7 +118,7 @@ jobs:
 
       - name: Prepare artifacts
         run: |
-          cd zig-out && zip -r ../csvzero-${{ matrix.archive_name }}.zip . && cd ..
+          Compress-Archive -Path zig-out\* -DestinationPath csvzero-${{ matrix.archive_name }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -129,7 +129,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build-linux, build-mac]
+    needs: [build-linux, build-mac, build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
