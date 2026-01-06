@@ -2,7 +2,9 @@ const std = @import("std");
 const csvz = @import("csvzero");
 
 pub fn main() !void {
-    var args = std.process.args();
+    var args = try std.process.ArgIterator.initWithAllocator(std.heap.smp_allocator);
+    defer args.deinit();
+
     _ = args.skip();
     const filename = args.next() orelse {
         std.log.err("missing filename", .{});
