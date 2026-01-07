@@ -121,7 +121,7 @@ var row: usize = 0;
 var col: usize = 0;
 
 while (true) {
-    const field = it.next() catch |err| switch (err) {
+    var field = it.next() catch |err| switch (err) {
         error.EOF => break,
         else => return err,
     };
