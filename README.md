@@ -6,6 +6,8 @@ It intentionally does less than typical CSV libraries. There is no record abstra
 
 This library is designed for systems engineers and performance-sensitive tooling where control and transparency matter more than convenience.
 
+If you’re curious about how this works under the hood, [this blog post](https://peymanmo.com/posts/1-csv-zero) walks through the techniques used here.
+
 ## Core Ideas
 
 - **Field-by-field iteration**, not records
