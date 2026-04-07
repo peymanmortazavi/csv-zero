@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @file csvzero.h
  * @brief Zero-copy CSV parser with streaming support
@@ -226,5 +230,9 @@ csvz_error csvz_iter_next(csvz_iterator *iter, csvz_field *field);
  *   }
  */
 csvz_error csvz_err();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
