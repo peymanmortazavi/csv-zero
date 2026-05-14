@@ -1,8 +1,8 @@
 const std = @import("std");
 const csvz = @import("csvzero");
 
-pub fn main() !void {
-    var args = try std.process.ArgIterator.initWithAllocator(std.heap.smp_allocator);
+pub fn main(init: std.process.Init) !void {
+    var args = try init.minimal.args.iterateAllocator(std.heap.smp_allocator);
     defer args.deinit();
 
     _ = args.skip();
@@ -11,9 +11,9 @@ pub fn main() !void {
         std.process.exit(1);
     };
 
-    const file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
+    const file = try std.Io.Dir.cwd().openFile(init.io, filename, .{ .mode = .read_only });
     var buffer: [64 * 1024]u8 = undefined;
-    var file_reader = file.reader(&buffer);
+    var file_reader = file.reader(init.io, &buffer);
     var it = csvz.Iterator.init(&file_reader.interface);
 
     var row: usize = 0;

@@ -65,9 +65,12 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn buildCExamples(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Build.Step.Compile) !void {
-    const examples_dir = try std.fs.cwd().openDir("examples", .{ .iterate = true });
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    const io = threaded.io();
+
+    const examples_dir = try std.Io.Dir.cwd().openDir(io, "examples", .{ .iterate = true });
     var it = examples_dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".c"))
             continue;
 
@@ -91,10 +94,10 @@ fn buildCExamples(b: *std.Build, target: std.Build.ResolvedTarget, lib: *std.Bui
             .{entry.name},
         );
         defer b.allocator.free(path);
-        c_simple_example.addCSourceFile(.{
+        c_simple_example.root_module.addCSourceFile(.{
             .file = b.path(path),
         });
-        c_simple_example.linkLibrary(lib);
+        c_simple_example.root_module.linkLibrary(lib);
         b.installArtifact(c_simple_example);
     }
 }

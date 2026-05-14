@@ -287,13 +287,13 @@ test "iterator" {
         const path = try std.mem.concat(std.testing.allocator, u8, &.{ "test/", tt.path });
         defer std.testing.allocator.free(path);
 
-        const test_file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-        defer test_file.close();
+        const test_file = try std.Io.Dir.cwd().openFile(std.testing.io, path, .{ .mode = .read_only });
+        defer test_file.close(std.testing.io);
 
         const read_buffer: []u8 = try std.testing.allocator.alloc(u8, tt.buffer_size);
         defer std.testing.allocator.free(read_buffer);
 
-        var file_reader = test_file.reader(read_buffer);
+        var file_reader = test_file.reader(std.testing.io, read_buffer);
 
         var it = csvz.Iterator.init(&file_reader.interface);
         try tt.run(&it);

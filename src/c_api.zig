@@ -2,6 +2,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const csvz = @import("root.zig");
 
+// This library currently only supports sync for the C API so initialize a global io instance.
+var threaded = std.Io.Threaded.init_single_threaded;
+const io = threaded.io();
+
 const c = @cImport({
     @cInclude("stdio.h");
     if (builtin.os.tag == .windows) {
@@ -10,8 +14,8 @@ const c = @cImport({
 });
 
 const FileSource = struct {
-    handle: std.fs.File,
-    reader: std.fs.File.Reader,
+    handle: std.Io.File,
+    reader: std.Io.File.Reader,
 };
 
 const ReadStatus = enum(c_int) {
@@ -98,11 +102,12 @@ export fn csvz_iter_from_file(filename: [*:0]const u8, buffer: [*]u8, len: usize
         last_error = .OOM;
         return null;
     };
-    const file = std.fs.cwd().openFileZ(filename, .{ .mode = .read_only }) catch {
+    
+    const file = std.Io.Dir.cwd().openFile(io, std.mem.span(filename), .{ .mode = .read_only }) catch {
         last_error = .OpenError;
         return null;
     };
-    it.source = .{ .file = .{ .handle = file, .reader = file.reader(buffer[0..len]) } };
+    it.source = .{ .file = .{ .handle = file, .reader = file.reader(io, buffer[0..len]) } };
     it.iterator = csvz.Iterator.init(&it.source.file.reader.interface);
     last_error = .NoError;
     return it;
@@ -113,7 +118,7 @@ export fn csvz_iter_from_fd(stream: *c.FILE, buffer: [*]u8, len: usize) callconv
         last_error = .OOM;
         return null;
     };
-    const file: std.fs.File = .{ .handle = switch (builtin.os.tag) {
+    const file: std.Io.File = .{ .handle = switch (builtin.os.tag) {
         .windows => blk: {
             const file_no = c._fileno(stream);
             const handle = c._get_osfhandle(file_no);
@@ -131,8 +136,8 @@ export fn csvz_iter_from_fd(stream: *c.FILE, buffer: [*]u8, len: usize) callconv
             }
             break :blk file_no;
         },
-    } };
-    it.source = .{ .fd = .{ .handle = file, .reader = file.reader(buffer[0..len]) } };
+    }, .flags = .{ .nonblocking = false } };
+    it.source = .{ .fd = .{ .handle = file, .reader = file.reader(io, buffer[0..len]) } };
     it.iterator = csvz.Iterator.init(&it.source.fd.reader.interface);
     last_error = .NoError;
     return it;
@@ -189,7 +194,7 @@ export fn csvz_unescape_in_place(data: [*]u8, len: usize) usize {
 
 export fn csvz_iter_free(it: *Iterator) callconv(.c) void {
     switch (it.source) {
-        .file => |f| f.handle.close(),
+        .file => |f| f.handle.close(io),
         else => {},
     }
     std.heap.c_allocator.destroy(it);
