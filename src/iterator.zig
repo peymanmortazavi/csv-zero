@@ -54,7 +54,7 @@ pub fn Csv(comptime dialect: Dialect) type {
         const Newline = '\n';
         const CarriageReturn = '\r';
 
-        const Bitmask = if (dialect.vector_length) |len| std.meta.Int(.unsigned, len) else void;
+        const Bitmask = if (dialect.vector_length) |len| @Int(.unsigned, len) else void;
         const Vector = if (dialect.vector_length) |len| @Vector(len, u8) else void;
 
         const QuoteMask: Vector = @splat(dialect.quote);
@@ -64,7 +64,7 @@ pub fn Csv(comptime dialect: Dialect) type {
         const use_vectors = dialect.vector_length != null;
 
         const is_delim = blk: {
-            var t = [_]bool{false} ** 256;
+            var t: [256]bool = @splat(false);
             t[dialect.delimiter] = true;
             t[dialect.quote] = true;
             t[Newline] = true;

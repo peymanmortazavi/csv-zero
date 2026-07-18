@@ -5,13 +5,7 @@ const csvz = @import("root.zig");
 // This library currently only supports sync for the C API so initialize a global io instance.
 var threaded = std.Io.Threaded.init_single_threaded;
 const io = threaded.io();
-
-const c = @cImport({
-    @cInclude("stdio.h");
-    if (builtin.os.tag == .windows) {
-        @cInclude("io.h");
-    }
-});
+const c = @import("c");
 
 const FileSource = struct {
     handle: std.Io.File,
@@ -102,7 +96,7 @@ export fn csvz_iter_from_file(filename: [*:0]const u8, buffer: [*]u8, len: usize
         last_error = .OOM;
         return null;
     };
-    
+
     const file = std.Io.Dir.cwd().openFile(io, std.mem.span(filename), .{ .mode = .read_only }) catch {
         last_error = .OpenError;
         return null;
