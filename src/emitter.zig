@@ -123,7 +123,7 @@ pub const Emitter = struct {
 
     inline fn contains_delim(data: []const u8) bool {
         const delim_map: [256]bool = comptime blk: {
-            var a = [_]bool{false} ** 256;
+            var a: [256]bool = @splat(false);
             a['\n'] = true;
             a[','] = true;
             a['"'] = true;

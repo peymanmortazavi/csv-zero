@@ -1,5 +1,12 @@
 const std = @import("std");
 
+fn addCIncludeFile(b: *std.Build, target: std.Target) std.Build.LazyPath {
+    const common = "#include <stdio.h>\n";
+    const windows = common ++ "include <io.h>\n";
+    const content = if (target.os.tag == .windows) common ++ windows else common;
+    return b.addWriteFiles().add("c.h", content);
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -7,15 +14,23 @@ pub fn build(b: *std.Build) !void {
     // Add option to choose between shared and static library
     const shared = b.option(bool, "shared", "Build shared library instead of static (default: false)") orelse false;
 
+    const c = b.addTranslateC(.{
+        .root_source_file = addCIncludeFile(b, target.result),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const c_api = b.addModule("csvzero_c_api", .{
+        .root_source_file = b.path("src/c_api.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "c", .module = c.createModule() }},
+    });
+
     const lib = b.addLibrary(.{
         .name = "csvzero",
         .linkage = if (shared) .dynamic else .static,
-        .root_module = b.addModule("csvzero_c_api", .{
-            .root_source_file = b.path("src/c_api.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        }),
+        .root_module = c_api,
     });
     b.installArtifact(lib);
 
