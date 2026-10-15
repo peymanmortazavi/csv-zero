@@ -46,7 +46,8 @@ pub fn Csv(comptime dialect: Dialect) type {
     return struct {
         reader: *std.Io.Reader,
         needs_unescape: bool = false,
-        quote_pending: bool = false,
+        /// Bytes to rewind the search by after the next fill: 1 = pending quote, 2 = pending quote + \r.
+        rewind_bytes: usize = 0,
         vector: Bitmask = if (use_vectors) 0 else {},
         vector_offset: if (use_vectors) usize else void = if (use_vectors) 0 else {},
 
@@ -160,8 +161,8 @@ pub fn Csv(comptime dialect: Dialect) type {
         /// quote is the very last character in the buffer and in the file, then it needs to be handled outside of this
         /// function.
         inline fn findQuotedRegion(self: *Self, start_index: usize) Error!?QuotedRegion {
-            var i = start_index - @intFromBool(self.quote_pending);
-            self.quote_pending = false;
+            var i = start_index - self.rewind_bytes;
+            self.rewind_bytes = 0;
             const data = self.reader.buffer[0..self.reader.end];
             var r = self.reader;
 
@@ -169,7 +170,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                 if (data[idx] == dialect.quote) {
                     if (idx + 1 == data.len) {
                         @branchHint(.unlikely);
-                        self.quote_pending = true;
+                        self.rewind_bytes = 1;
                         return null;
                     }
 
@@ -192,7 +193,7 @@ pub fn Csv(comptime dialect: Dialect) type {
                         CarriageReturn => {
                             if (idx + 2 == data.len) {
                                 @branchHint(.unlikely);
-                                self.quote_pending = true;
+                                self.rewind_bytes = 2;
                                 return null;
                             }
                             self.skipNextDelim();
