@@ -197,6 +197,18 @@ test "iterator" {
             },
         },
         .{
+            // The file is 14 bytes: aaa, , "x", \r, \n, b, , y, \r, \n.
+            // With an 8-byte read buffer the first chunk ends exactly at the \r of the CRLF that
+            // follows the quoted field, so the \n arrives in the next chunk.
+            .path = "quotes_crlf_chunk_boundary.csv",
+            .expected_error = null,
+            .expected_table = &.{
+                &.{ "aaa", "x" },
+                &.{ "b", "y" },
+            },
+            .buffer_size = 8,
+        },
+        .{
             .path = "empty_cells.csv",
             .expected_error = null,
             .expected_table = &.{
