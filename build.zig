@@ -2,7 +2,7 @@ const std = @import("std");
 
 fn addCIncludeFile(b: *std.Build, target: std.Target) std.Build.LazyPath {
     const common = "#include <stdio.h>\n";
-    const windows = common ++ "include <io.h>\n";
+    const windows = common ++ "#include <io.h>\n";
     const content = if (target.os.tag == .windows) common ++ windows else common;
     return b.addWriteFiles().add("c.h", content);
 }
